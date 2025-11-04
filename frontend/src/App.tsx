@@ -1,8 +1,8 @@
-import { Container, Box, Typography, LinearProgress, Button, Stack, Paper } from '@mui/material'
+import { Container, Box, Typography, Button, Stack, Paper, CssBaseline } from '@mui/material'
 import { useMemo, useState } from 'react'
+import { ThemeProvider, createTheme } from '@mui/material/styles'
 import axios from 'axios'
 import UploadCard from './components/UploadCard'
-import VideoPreview from './components/VideoPreview'
 import LoadingOverlay from './components/LoadingOverlay'
 import Dashboard from './components/Dashboard'
 
@@ -66,45 +66,101 @@ export default function App() {
     window.location.href = `${API_BASE}/download/video/${outputName}`
   }
 
+  const theme = createTheme({
+    palette: {
+      mode: 'light',
+      background: {
+        default: '#e8ecf1'
+      },
+      primary: {
+        main: '#2563eb',
+        dark: '#1d4ed8'
+      },
+      text: {
+        primary: '#1e293b'
+      }
+    },
+    typography: {
+      fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif'
+    },
+    shape: {
+      borderRadius: 16
+    },
+    components: {
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            borderRadius: '1rem',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+            backgroundColor: '#ffffff'
+          }
+        }
+      },
+      MuiButton: {
+        styleOverrides: {
+          root: {
+            borderRadius: '0.75rem',
+            textTransform: 'none',
+            fontWeight: 600
+          }
+        }
+      }
+    }
+  })
+
   return (
-    <Container maxWidth="md" sx={{ py: 6 }}>
-      <Typography variant="h4" align="center" gutterBottom>
-        Drone Detection & Tracking
-      </Typography>
-      <Typography variant="subtitle1" align="center" color="text.secondary" gutterBottom>
-        Upload a video and start detection. We'll render tracking results and summary metrics.
-      </Typography>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Container maxWidth="md" sx={{ py: 6, minHeight: '100dvh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <Typography variant="h4" align="center" gutterBottom sx={{ color: 'text.primary' }}>
+          Drone Detection & Tracking
+        </Typography>
+        <Typography variant="subtitle1" align="center" color="text.secondary" gutterBottom>
+          Upload a video and start detection. We’ll process it and show final results.
+        </Typography>
 
-      <Box sx={{ my: 4 }}>
-        <UploadCard onUpload={onUpload} disabled={processing} />
-      </Box>
-
-      <Stack direction="row" spacing={2} justifyContent="center" alignItems="center">
-        <Button variant="contained" disabled={!canStart} onClick={startProcessing}>
-          Start Detection
-        </Button>
-      </Stack>
-
-      <Box sx={{ my: 4 }}>
-        <VideoPreview
-          src={outputName ? `${API_BASE}/download/video/${outputName}` : null}
-        />
-      </Box>
-
-      {metrics && (
-        <Box sx={{ my: 2 }}>
-          <Dashboard metrics={metrics} />
+        <Box sx={{ my: 4 }}>
+          <UploadCard onUpload={onUpload} disabled={processing} />
         </Box>
-      )}
 
-      <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
-        <Button variant="outlined" disabled={!outputName} onClick={download}>
-          Download Result
-        </Button>
-      </Stack>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" alignItems="center">
+          <Button variant="contained" color="primary" disabled={!canStart} onClick={startProcessing}>
+            Start Detection
+          </Button>
+          <Button variant="outlined" disabled={!outputName} onClick={download}>
+            Download Result
+          </Button>
+        </Stack>
 
-      <LoadingOverlay open={processing} message={progressMsg} />
-    </Container>
+        {/* No video preview while uploading or processing; show only final results */}
+        {processing && (
+          <Box sx={{ mt: 4 }}>
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <Typography variant="body1" color="text.secondary">Processing video, please wait…</Typography>
+            </Paper>
+          </Box>
+        )}
+
+        {!processing && outputName && (
+          <Box sx={{ mt: 4 }}>
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <Typography variant="h6" gutterBottom>Processing Complete</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Your video has been processed. You can download the result and view the summary below.
+              </Typography>
+            </Paper>
+          </Box>
+        )}
+
+        {!processing && metrics && (
+          <Box sx={{ my: 2 }}>
+            <Dashboard metrics={metrics} />
+          </Box>
+        )}
+
+        <LoadingOverlay open={processing} message={progressMsg || 'Processing video, please wait…'} />
+      </Container>
+    </ThemeProvider>
   )
 }
 

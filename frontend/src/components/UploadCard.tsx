@@ -21,7 +21,17 @@ export default function UploadCard({ onUpload, disabled }: Props) {
   }, [onUpload])
 
   return (
-    <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderStyle: dragOver ? 'solid' : 'dashed' }}
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 4,
+        textAlign: 'center',
+        borderStyle: dragOver ? 'solid' : 'dashed',
+        borderColor: dragOver ? 'primary.main' : 'divider',
+        borderWidth: 2,
+        transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+        boxShadow: dragOver ? '0 6px 24px rgba(0,0,0,0.12)' : '0 4px 20px rgba(0,0,0,0.08)'
+      }}
       onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true) }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); if (!disabled) handleFiles(e.dataTransfer.files) }}
