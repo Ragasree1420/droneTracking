@@ -144,7 +144,7 @@ def detect_video_type(frame):
     return "RGB"
 
 # -------------------- Main Test Function --------------------
-def test():
+def test(input_path=None, output_path=None, no_gui=False):
     # Define both weight paths
     IRweights_path = os.path.join(project_root, 'detect_wrapper', 'weights', 'best.pt')
     RGBweights_path = os.path.join(project_root, 'detect_wrapper', 'weights', 'drone_rgb_yolov5s.pt')
@@ -154,7 +154,8 @@ def test():
     det_time = []     # detection time per frame
     classification_results = []  # store (class_name, confidence)
     interval = 50
-    cap = cv2.VideoCapture(video_path)
+    vid_path = input_path if input_path is not None else video_path
+    cap = cv2.VideoCapture(vid_path)
     
     ret, frame = cap.read()
     if not ret:
@@ -162,6 +163,14 @@ def test():
         return
 
     oframe = frame.copy()
+    # Optional video writer if output_path provided
+    writer = None
+    out_path = output_path
+    if out_path is not None:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        height, width = frame.shape[:2]
+        writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
     # Initialize detection and tracking
     drone_det = DroneDetection(IRweights_path=IRweights_path, RGBweights_path=RGBweights_path)
     drone_tracker = Tracker()
@@ -256,11 +265,14 @@ def test():
             last_det_conf = det_conf
             frames_since_last_detection = 0
             
-            cv2.imshow("tracking", visuframe)
-            key = cv2.waitKey(30) & 0xFF  # Increased wait time for better video playback
-            if key == ord('q') or key == 27:  # 'q' or ESC to quit
-                exit_flag = True
-                break
+            if writer is not None:
+                writer.write(visuframe)
+            if not no_gui:
+                cv2.imshow("tracking", visuframe)
+                key = cv2.waitKey(30) & 0xFF  # Increased wait time for better video playback
+                if key == ord('q') or key == 27:  # 'q' or ESC to quit
+                    exit_flag = True
+                    break
         else:
             # Add "No Drone Detected" caption when no drone is found
             visuframe = oframe.copy()
@@ -287,13 +299,14 @@ def test():
             
             # Add the text
             cv2.putText(visuframe, text, (x, y), font, font_scale, color, thickness)
-            
-            
-            cv2.imshow("tracking", visuframe)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:  # 'q' or ESC to quit
-                exit_flag = True
-                break
+            if writer is not None:
+                writer.write(visuframe)
+            if not no_gui:
+                cv2.imshow("tracking", visuframe)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q') or key == 27:  # 'q' or ESC to quit
+                    exit_flag = True
+                    break
 
         # Read next frame for main loop
         ret, frame = cap.read()
@@ -407,17 +420,21 @@ def test():
                 model_text = f"Weights: {mode}"
                 cv2.putText(visuframe, model_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
                 cv2.putText(visuframe, model_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
-                
-                cv2.imshow("tracking", visuframe)
-                key = cv2.waitKey(30) & 0xFF  # Increased wait time for better video playback
-                if key == ord('q') or key == 27:  # 'q' or ESC to quit
-                    break
+                if writer is not None:
+                    writer.write(visuframe)
+                if not no_gui:
+                    cv2.imshow("tracking", visuframe)
+                    key = cv2.waitKey(30) & 0xFF  # Increased wait time for better video playback
+                    if key == ord('q') or key == 27:  # 'q' or ESC to quit
+                        break
 
             # if agent requested redetect, continue outer loop to run detector again
             if force_redetect:
                 first_track = False  # keep tracker instance but we will re-detect next outer step
 
     cap.release()
+    if writer is not None:
+        writer.release()
     cv2.destroyAllWindows()
 
     # ------- Summary Report -------
@@ -437,10 +454,33 @@ def test():
     else:
         print("Final classification: None")
 
+    # Save metrics JSON alongside output if applicable
+    if out_path is not None:
+        try:
+            metrics = {
+                "average_tracking_time_sec": avg_track,
+                "average_detection_time_sec": avg_detect,
+                "final_classification": {
+                    "class": cname if final_cls is not None else None,
+                    "confidence": cconf if final_cls is not None else None
+                }
+            }
+            metrics_path = out_path + ".json"
+            with open(metrics_path, 'w', encoding='utf-8') as f:
+                json.dump(metrics, f)
+            print(f"Metrics saved: {metrics_path}")
+        except Exception as e:
+            print(f"Failed to save metrics JSON: {e}")
+
 
 # -------------------- Run --------------------
 if __name__ == "__main__":
-    test()
+    parser = argparse.ArgumentParser(description="Drone detection and tracking")
+    parser.add_argument("--input", type=str, default=None, help="Input video path")
+    parser.add_argument("--output", type=str, default=None, help="Output video path (MP4)")
+    parser.add_argument("--no-gui", action="store_true", help="Disable GUI windows during processing")
+    args = parser.parse_args()
+    test(input_path=args.input, output_path=args.output, no_gui=args.no_gui)
 
 
 
