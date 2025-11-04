@@ -1,11 +1,20 @@
 #both rgb and ir
 from __future__ import division  # Must be first
+from inference_sdk import InferenceHTTPClient
+
+# Initialize Roboflow Classification Client
+CLIENT = InferenceHTTPClient(
+    api_url="https://classify.roboflow.com",
+    api_key="oo64LiCRWeP5aY7CKU27"  # Your API key
+)
+
 
 import sys
 import os
 import time
 import warnings
 warnings.filterwarnings("ignore")
+
 
 # -------------------- Add parent folder to sys.path --------------------
 project_root = os.path.dirname(os.path.abspath(__file__))  # Codes folder
@@ -51,7 +60,7 @@ from detect_wrapper.utils.datasets import LoadStreams, LoadImages
 from tracking_wrapper.dronetracker.trackinguav.evaluation.tracker import Tracker
 
 # -------------------- Video Path & Settings --------------------
-video_path = os.path.join(project_root, 'testvideo', 'a2.mp4')
+video_path = os.path.join(project_root, 'testvideo', 'n23.mp4')
 magnification = 1  # ✅ Keep original video size
 print("Project root:", project_root)
 print("Video path:", video_path)
@@ -141,8 +150,9 @@ def test():
     RGBweights_path = os.path.join(project_root, 'detect_wrapper', 'weights', 'drone_rgb_yolov5s.pt')
     # RGBweights_path = os.path.join(os.path.dirname(project_root), 'checkpoints', 'drone_rgb_yolov5s.pt')
     
-    time_record = []
-    det_time = []
+    time_record = []  # tracking time per frame
+    det_time = []     # detection time per frame
+    classification_results = []  # store (class_name, confidence)
     interval = 50
     cap = cv2.VideoCapture(video_path)
     
@@ -158,6 +168,7 @@ def test():
     first_track = True
     last_detect_box = None
     frames_since_last_detection = 0
+    classified_once = False  # ensure we classify only once at first detection
 
     # Agent policy parameters
     iou_threshold = 0.3       # if detector vs tracker IOU below this, reinit
@@ -198,6 +209,36 @@ def test():
                               (bbx[0] + bbx[2], bbx[1] + bbx[3]), (0, 255, 0), 2)
                 cv2.putText(visuframe, f'Drone {det_conf:.2f}', (bbx[0], bbx[1] - 10), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                # Classification: only once at first detection (no on-frame display)
+                if not classified_once:
+                    try:
+                        x1, y1, w, h = bbx
+                        x2, y2 = x1 + w, y1 + h
+                        H, W = frame.shape[:2]
+                        # clamp crop to frame bounds
+                        x1c = max(0, min(W - 1, x1))
+                        y1c = max(0, min(H - 1, y1))
+                        x2c = max(0, min(W, x2))
+                        y2c = max(0, min(H, y2))
+                        if x2c > x1c and y2c > y1c:
+                            crop = frame[y1c:y2c, x1c:x2c]
+                            temp_path = "drone_crop.jpg"
+                            cv2.imwrite(temp_path, crop)
+                            result = CLIENT.infer(temp_path, model_id="drone-fsixa/2")
+                            if "predictions" in result and len(result["predictions"]) > 0:
+                                pred = result["predictions"][0]
+                                class_name = pred.get("class", "unknown")
+                                confidence = float(pred.get("confidence", 0.0))
+                                classification_results.append((class_name, confidence))
+                                print(f"[CLASSIFY] Stored result: {class_name} ({confidence:.2f})")
+                            else:
+                                print("[CLASSIFY] No predictions returned from Roboflow")
+                        else:
+                            print("[CLASSIFY] Skipped crop: invalid bbox after clamping")
+                        classified_once = True
+                    except Exception as e:
+                        print(f"[CLASSIFY] Error during classification: {e}")
+                   
         
         # Use the highest confidence detection for tracking
         if valid_detections:
@@ -378,9 +419,24 @@ def test():
 
     cap.release()
     cv2.destroyAllWindows()
+
+    # ------- Summary Report -------
+    avg_track = float(np.array(time_record).mean()) if len(time_record) > 0 else 0.0
+    avg_detect = float(np.array(det_time).mean()) if len(det_time) > 0 else 0.0
     print("Done......")
-    print('Track average time:', np.array(time_record).mean())
-    print('Detect average time:', np.array(det_time).mean())
+    print(f"Average tracking time per frame: {avg_track:.6f} sec")
+    print(f"Average detection time per frame: {avg_detect:.6f} sec")
+
+    final_cls = None
+    if classification_results:
+        # choose highest confidence as final classification
+        final_cls = max(classification_results, key=lambda x: x[1])
+    if final_cls is not None:
+        cname, cconf = final_cls
+        print(f"Final classification: {cname} ({cconf:.4f})")
+    else:
+        print("Final classification: None")
+
 
 # -------------------- Run --------------------
 if __name__ == "__main__":
