@@ -13,6 +13,9 @@ dist/
 dataset/
 env/
 venv/
+drone_env/
+detect_wrapper/weights/
+testvideo/
 .env
 .DS_Store
 venv38/

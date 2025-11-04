@@ -51,8 +51,10 @@ from detect_wrapper.utils.datasets import LoadStreams, LoadImages
 from tracking_wrapper.dronetracker.trackinguav.evaluation.tracker import Tracker
 
 # -------------------- Video Path & Settings --------------------
-video_path = os.path.join(project_root, 'testvideo', 'a5.mp4')
+video_path = os.path.join(project_root, 'testvideo', 'a2.mp4')
 magnification = 1  # ✅ Keep original video size
+print("Project root:", project_root)
+print("Video path:", video_path)
 
 # -------------------- Helper Function --------------------
 def lefttop2center(bbx):
